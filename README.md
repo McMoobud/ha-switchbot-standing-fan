@@ -1,6 +1,6 @@
 # SwitchBot Standing Fan — Home Assistant custom integration
 
-> ⚠️ **Disclaimer:** This integration was built end-to-end using **[Claude Code](https://claude.com/claude-code)** (Anthropic) — including the BLE diagnostics that identified the device, the patches against `home-assistant/core`, the entity wiring, on-device testing, and this README. Treat it as community-quality AI-assisted work: it works on the maintainer's hardware (tested on a SwitchBot Standing Circulator Fan with RGB Lights, MAC `B0:E9:FE:CD:7B:CF`) and the code is plain-Python and reviewable, but it has not been through HA's core review process. PRs and issues welcome.
+> ⚠️ **Disclaimer:** This integration was built end-to-end using **[Claude Code](https://claude.com/claude-code)** (Anthropic) — including the BLE diagnostics that identified the device, the patches against `home-assistant/core`, the entity wiring, on-device testing, and this README. Treat it as community-quality AI-assisted work: it works on the maintainer's hardware (tested on a SwitchBot Standing Circulator Fan with RGB Lights, MAC) and the code is plain-Python and reviewable, but it has not been through HA's core review process. PRs and issues welcome.
 
 
 A drop-in replacement for Home Assistant's bundled `switchbot` integration that adds **full local Bluetooth control** for the **SwitchBot Standing Circulator Fan** (and any other Standing Fan model that identifies via service-data suffix `0x00 11 07 60`).
