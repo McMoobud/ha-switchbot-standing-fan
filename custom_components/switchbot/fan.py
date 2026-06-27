@@ -130,7 +130,8 @@ class SwitchBotStandingFanEntity(SwitchBotFanEntity):
 
     Differs from the Circulator Fan entity:
       - Drops FanEntityFeature.OSCILLATE (per-axis switches handle oscillation).
-      - 9 discrete speed levels (matches the SwitchBot app slider).
+      - Full 1-100% speed control (the device accepts any percentage; the
+        SwitchBot app's slider is likewise continuous, not 9 fixed steps).
       - 4 preset modes matching the app (normal / natural / sleep / baby).
         The library's 5th mode (`custom_natural`) is set via the app's
         custom-pattern flow and is not exposed here as a one-shot preset.
@@ -149,7 +150,9 @@ class SwitchBotStandingFanEntity(SwitchBotFanEntity):
         StandingFanMode.SLEEP.name.lower(),
         StandingFanMode.BABY.name.lower(),
     ]
-    _attr_speed_count = 9
+    # No _attr_speed_count override: HA's default of 100 gives the full
+    # 1-100% range. `set_percentage` sends the percentage straight through to
+    # the device as its speed byte (0x00-0x64).
 
 
 class SwitchBotAirPurifierEntity(SwitchbotEntity, FanEntity):

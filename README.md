@@ -13,13 +13,21 @@ When a Standing Fan is discovered, the following entities are created:
 
 | Entity | Purpose |
 |---|---|
-| `fan.<name>` | Power, 9-step speed, 4 preset modes (Normal / Natural / Sleep / Baby) |
+| `fan.<name>` | Power, 1–100% speed, 4 preset modes (Normal / Natural / Sleep / Baby) |
 | `switch.<name>_horizontal_oscillation` | Horizontal sweep on/off |
 | `switch.<name>_vertical_oscillation` | Vertical sweep on/off |
 | `select.<name>_night_light` | Off / Soft / Bright |
 | `sensor.<name>_battery` | Battery % |
 
 All commands are sent **locally over BLE** via an active-scanning Bluetooth proxy — no cloud, no SwitchBot account, no SwitchBot Hub required.
+
+### State sync
+
+The fan pushes live state (on/off, speed, mode, battery) to HA through its BLE advertisements — but only when an **active-scanning** proxy is in range to solicit them. So that changes made from the fan's own buttons, the remote, or the SwitchBot app still show up on passive-only setups, the integration also **actively polls the fan** as a fallback. With active scanning, updates are effectively instant and the poll is just a safety net.
+
+The poll interval is configurable: **Settings → Devices & Services → SwitchBot → (your fan) → Configure → "Fan status poll interval (seconds)"**. It defaults to **30 s**; raise it (or set **0** to disable) if the fan runs on battery and you want to minimise standby drain. Note the fan's BLE radio stays awake while the fan is off, so polling consumes a little battery even in off mode.
+
+The **night-light level** is the one exception — it's only ever present in active-scan advertisements, never in the polled connection response. The selector is therefore optimistic (it shows what you last set and survives restarts) and only mirrors changes made *outside* HA when an active-scanning proxy is in range.
 
 ## Requirements
 
@@ -43,7 +51,7 @@ All commands are sent **locally over BLE** via an active-scanning Bluetooth prox
 
 ## How it replaces core
 
-This integration **shadows** the bundled `switchbot` integration (same `domain: switchbot`). Existing SwitchBot devices already configured in HA (Bots, Curtains, Roller Shades, Locks, Plug Minis, …) continue to work — all 26 files from core 2026.6.4 are copied verbatim, only the four files needed for Standing Fan support are patched.
+This integration **shadows** the bundled `switchbot` integration (same `domain: switchbot`). Existing SwitchBot devices already configured in HA (Bots, Curtains, Roller Shades, Locks, Plug Minis, …) continue to work — all 26 files from core 2026.6.4 are copied verbatim, only the handful of files needed for Standing Fan support are patched.
 
 If/when upstream adds STANDING_FAN, simply delete `/config/custom_components/switchbot/` and restart — core takes over.
 
@@ -51,17 +59,20 @@ If/when upstream adds STANDING_FAN, simply delete `/config/custom_components/swi
 
 - **Oscillation angle setters (30° / 60° / 90°)** are **not exposed**. PySwitchbot's per-axis angle commands don't appear to land on this firmware variant — the device ignores them. Removed from the entity list to avoid confusing UX. Open to PRs that find a reliable command format.
 - **9-hour sleep timer** — not exposed by PySwitchbot.
-- **RGB colour for the night light** — not exposed by PySwitchbot (only LEVEL_1 / LEVEL_2 / OFF). The product is marketed as "RGB Lights" but the BLE command surface does not currently support hue/saturation control. Open to a PySwitchbot PR.
+- **RGB colour for the night light** — not exposed by PySwitchbot (only Off / Soft / Bright). The product is marketed as "RGB Lights" but the BLE command surface does not currently support hue/saturation control. Open to a PySwitchbot PR.
+  - Note: the **Off** option sends night-light brightness byte `0x00`. PySwitchbot's `NightLightState.OFF` encodes off as byte `0x03`, which this firmware ignores (the light stays on), so the integration sends the raw `0x00` command instead. See [`docs/upstream-pr.md`](docs/upstream-pr.md) for the upstream report.
 
 ## Patched files (vs core 2026.6.4)
 
 ```
 custom_components/switchbot/
-├── const.py            # +SupportedModels.STANDING_FAN, +CONNECTABLE_SUPPORTED_MODEL_TYPES entry
-├── __init__.py         # +PLATFORMS_BY_TYPE, +CLASS_BY_DEVICE
-├── fan.py              # +SwitchBotStandingFanEntity (9 speeds, 4 modes, no combined oscillate)
-├── select.py           # +SwitchBotStandingFanNightLightSelect
+├── const.py            # +SupportedModels.STANDING_FAN, +CONNECTABLE_SUPPORTED_MODEL_TYPES entry, +fan poll-interval consts
+├── __init__.py         # +PLATFORMS_BY_TYPE, +CLASS_BY_DEVICE, +configurable fan poll interval
+├── config_flow.py      # +Standing Fan poll-interval option
+├── fan.py              # +SwitchBotStandingFanEntity (1–100% speed, 4 modes, no combined oscillate)
+├── select.py           # +SwitchBotStandingFanNightLightSelect (raw 0x00 off command, optimistic state)
 ├── switch.py           # +SwitchBotStandingFan{H,V}OscillationSwitch
+├── coordinator.py      # +configurable active-poll interval (state-sync fallback)
 ├── manifest.json       # version bump
 └── translations/en.json
 ```

@@ -5,7 +5,6 @@ import logging
 
 import switchbot
 from switchbot import (
-    NightLightState,
     SwitchbotOperationError,
     VerticalOscillationAngle,
 )
@@ -14,6 +13,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .coordinator import SwitchbotConfigEntry, SwitchbotDataUpdateCoordinator
 from .entity import SwitchbotEntity, exception_handler
@@ -45,16 +45,38 @@ NIGHT_LIGHT_OFF = "off"
 NIGHT_LIGHT_SOFT = "soft"
 NIGHT_LIGHT_BRIGHT = "bright"
 NIGHT_LIGHT_OPTIONS = [NIGHT_LIGHT_OFF, NIGHT_LIGHT_SOFT, NIGHT_LIGHT_BRIGHT]
-NIGHT_LIGHT_TO_STATE = {
-    NIGHT_LIGHT_OFF: NightLightState.OFF,
-    NIGHT_LIGHT_SOFT: NightLightState.LEVEL_2,
-    NIGHT_LIGHT_BRIGHT: NightLightState.LEVEL_1,
+
+# Night-light command header (after the SwitchBot `57 0f 41 05 02` prefix the
+# device expects: brightness byte + 0xFF 0xFF).
+COMMAND_SET_NIGHT_LIGHT = "570f410502"
+
+# Brightness byte the device actually wants, and the value it reports back in
+# the advertisement's 2-bit `nightLight` field:
+#   0 = off, 1 = bright (LEVEL_1), 2 = soft (LEVEL_2).
+#
+# NOTE: pySwitchbot's `NightLightState.OFF` encodes off as byte 3, but this
+# firmware ignores byte 3 (the light stays on), which is why selecting "off"
+# in HA never turned the RGB light off. We send the raw byte 0 here instead.
+# Tracked upstream — see docs/upstream-pr.md.
+NIGHT_LIGHT_TO_BYTE = {
+    NIGHT_LIGHT_OFF: 0x00,
+    NIGHT_LIGHT_BRIGHT: 0x01,
+    NIGHT_LIGHT_SOFT: 0x02,
 }
-STATE_TO_NIGHT_LIGHT = {v.value: k for k, v in NIGHT_LIGHT_TO_STATE.items()}
+BYTE_TO_NIGHT_LIGHT = {v: k for k, v in NIGHT_LIGHT_TO_BYTE.items()}
 
 
-class SwitchBotStandingFanNightLightSelect(SwitchbotEntity, SelectEntity):
-    """Night-light setting for SwitchBot Standing Fan (Off / Soft / Bright)."""
+class SwitchBotStandingFanNightLightSelect(
+    SwitchbotEntity, SelectEntity, RestoreEntity
+):
+    """Night-light setting for SwitchBot Standing Fan (Off / Soft / Bright).
+
+    The night-light level is only reported in the fan's BLE *advertisement*,
+    never in the active-connection response. On setups without active BLE
+    scanning that value never arrives, so the entity is optimistic: it shows
+    the option last set from HA, and defers to a real advertised value if one
+    is ever received. The last option is also restored across restarts.
+    """
 
     _device: switchbot.SwitchbotStandingFan
     _attr_translation_key = "night_light"
@@ -64,19 +86,42 @@ class SwitchBotStandingFanNightLightSelect(SwitchbotEntity, SelectEntity):
         """Initialize the night-light select entity."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.base_unique_id}_night_light"
+        self._assumed_option: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last selected option across restarts."""
+        await super().async_added_to_hass()
+        if (
+            (last_state := await self.async_get_last_state()) is not None
+            and last_state.state in NIGHT_LIGHT_OPTIONS
+        ):
+            self._assumed_option = last_state.state
 
     @property
     def current_option(self) -> str | None:
         """Return the currently selected night-light state."""
         state = self._device.get_night_light_state()
-        if state is None:
-            return None
-        return STATE_TO_NIGHT_LIGHT.get(state)
+        if state is not None and (option := BYTE_TO_NIGHT_LIGHT.get(state)):
+            return option
+        # No advertised value available — fall back to the last value we set.
+        return self._assumed_option
 
     @exception_handler
     async def async_select_option(self, option: str) -> None:
         """Set night-light state."""
-        await self._device.set_night_light(NIGHT_LIGHT_TO_STATE[option])
+        byte = NIGHT_LIGHT_TO_BYTE[option]
+        cmd = f"{COMMAND_SET_NIGHT_LIGHT}{byte:02X}FFFF"
+        _LOGGER.debug(
+            "Switchbot standing fan set night light %s (byte 0x%02X) %s",
+            option,
+            byte,
+            self._address,
+        )
+        result = await self._device._send_command(cmd)  # noqa: SLF001
+        if self._device._check_command_result(result, 0, {1}):  # noqa: SLF001
+            self._assumed_option = option
+            # Refresh cached state so a real advertised value can take over.
+            await self._device.update()
         self.async_write_ha_state()
 
 

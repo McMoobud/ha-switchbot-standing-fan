@@ -39,6 +39,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     CONF_CURTAIN_SPEED,
     CONF_ENCRYPTION_KEY,
+    CONF_FAN_POLL_INTERVAL,
     CONF_KEY_ID,
     CONF_LOCK_NIGHTLATCH,
     CONF_RETRY_COUNT,
@@ -46,11 +47,14 @@ from .const import (
     CURTAIN_SPEED_MAX,
     CURTAIN_SPEED_MIN,
     DEFAULT_CURTAIN_SPEED,
+    DEFAULT_FAN_POLL_INTERVAL,
     DEFAULT_LOCK_NIGHTLATCH,
     DEFAULT_RETRY_COUNT,
     DOMAIN,
     ENCRYPTED_MODELS,
     ENCRYPTED_SWITCHBOT_MODEL_TO_CLASS,
+    FAN_POLL_INTERVAL_MAX,
+    FAN_POLL_INTERVAL_MIN,
     NON_CONNECTABLE_SUPPORTED_MODEL_TYPES,
     SUPPORTED_MODEL_TYPES,
     SupportedModels,
@@ -510,6 +514,29 @@ class SwitchbotOptionsFlowHandler(OptionsFlow):
                             max=CURTAIN_SPEED_MAX,
                             step=1,
                             mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    )
+                }
+            )
+        if (
+            CONF_SENSOR_TYPE in self.config_entry.data
+            and self.config_entry.data[CONF_SENSOR_TYPE]
+            == SupportedModels.STANDING_FAN
+        ):
+            options.update(
+                {
+                    vol.Optional(
+                        CONF_FAN_POLL_INTERVAL,
+                        default=self.config_entry.options.get(
+                            CONF_FAN_POLL_INTERVAL, DEFAULT_FAN_POLL_INTERVAL
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=FAN_POLL_INTERVAL_MIN,
+                            max=FAN_POLL_INTERVAL_MAX,
+                            step=5,
+                            unit_of_measurement="s",
+                            mode=selector.NumberSelectorMode.BOX,
                         )
                     )
                 }
