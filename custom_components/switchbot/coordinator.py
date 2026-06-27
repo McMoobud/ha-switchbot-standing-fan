@@ -40,6 +40,7 @@ class SwitchbotDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None])
         connectable: bool,
         model: SwitchbotModel,
         config_entry: ConfigEntry,
+        poll_interval: float | None = None,
     ) -> None:
         """Initialize global switchbot data updater."""
         super().__init__(
@@ -57,6 +58,7 @@ class SwitchbotDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None])
         self.base_unique_id = base_unique_id
         self.model = model
         self.config_entry = config_entry
+        self._poll_interval = poll_interval
         self._ready_event = asyncio.Event()
         self._was_unavailable = True
 
@@ -66,18 +68,24 @@ class SwitchbotDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None])
         service_info: bluetooth.BluetoothServiceInfoBleak,
         seconds_since_last_poll: float | None,
     ) -> bool:
-        # Only poll if hass is running, we need to poll,
-        # and we actually have a way to connect to the device
-        return (
-            self.hass.state is CoreState.running
-            and self.connectable
-            and self.device.poll_needed(seconds_since_last_poll)
-            and bool(
-                bluetooth.async_ble_device_from_address(
-                    self.hass, service_info.device.address, connectable=True
-                )
+        # Only poll if hass is running and we actually have a way to connect.
+        if self.hass.state is not CoreState.running or not self.connectable:
+            return False
+        if not bluetooth.async_ble_device_from_address(
+            self.hass, service_info.device.address, connectable=True
+        ):
+            return False
+        if self._poll_interval is not None:
+            # Devices whose state changes from their own controls (e.g. the
+            # Standing Fan's buttons / remote / app) only push state to HA via
+            # *active-scan* advertisements. On passive-scanning setups that
+            # state would otherwise never reach HA, so fall back to actively
+            # polling on a fixed interval.
+            return (
+                seconds_since_last_poll is None
+                or seconds_since_last_poll >= self._poll_interval
             )
-        )
+        return self.device.poll_needed(seconds_since_last_poll)
 
     async def _async_update(
         self, service_info: bluetooth.BluetoothServiceInfoBleak

@@ -24,10 +24,12 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from .const import (
     CONF_CURTAIN_SPEED,
     CONF_ENCRYPTION_KEY,
+    CONF_FAN_POLL_INTERVAL,
     CONF_KEY_ID,
     CONF_RETRY_COUNT,
     CONNECTABLE_SUPPORTED_MODEL_TYPES,
     DEFAULT_CURTAIN_SPEED,
+    DEFAULT_FAN_POLL_INTERVAL,
     DEFAULT_RETRY_COUNT,
     DEPRECATED_SENSOR_TYPE_AIR_PURIFIER,
     DEPRECATED_SENSOR_TYPE_AIR_PURIFIER_TABLE,
@@ -41,7 +43,6 @@ from .coordinator import SwitchbotConfigEntry, SwitchbotDataUpdateCoordinator
 from .services import async_setup_services
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
 
 PLATFORMS_BY_TYPE = {
     SupportedModels.BULB.value: [Platform.SENSOR, Platform.LIGHT],
@@ -380,6 +381,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SwitchbotConfigEntry) ->
             retry_count=entry.options[CONF_RETRY_COUNT],
         )
 
+    # The Standing Fan changes state from its own controls and only pushes that
+    # state to HA via active-scan advertisements. On passive-scanning setups we
+    # never see those changes, so actively poll on a fixed interval as a
+    # fallback. The interval (seconds) is configurable via the options flow;
+    # 0 disables it.
+    poll_interval: float | None = None
+    if switchbot_model is switchbot.SwitchbotModel.STANDING_FAN:
+        configured = entry.options.get(
+            CONF_FAN_POLL_INTERVAL, DEFAULT_FAN_POLL_INTERVAL
+        )
+        poll_interval = float(configured) if configured else None
+
     coordinator = entry.runtime_data = SwitchbotDataUpdateCoordinator(
         hass,
         _LOGGER,
@@ -390,6 +403,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SwitchbotConfigEntry) ->
         connectable,
         switchbot_model,
         entry,
+        poll_interval=poll_interval,
     )
     entry.async_on_unload(coordinator.async_start())
     if not await coordinator.async_wait_ready():

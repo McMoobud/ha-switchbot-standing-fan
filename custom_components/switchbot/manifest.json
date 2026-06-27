@@ -43,5 +43,5 @@
   "loggers": ["switchbot"],
   "quality_scale": "gold",
   "requirements": ["PySwitchbot==2.2.0"],
-  "version": "2026.6.4-standingfan-4"
+  "version": "2026.6.4-standingfan-7"
 }

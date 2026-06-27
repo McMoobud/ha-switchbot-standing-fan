@@ -221,6 +221,11 @@ DEFAULT_LOCK_NIGHTLATCH = False
 DEFAULT_CURTAIN_SPEED = 255
 CURTAIN_SPEED_MIN = 0
 CURTAIN_SPEED_MAX = 255
+# Standing Fan active-poll fallback interval, in seconds. 0 disables polling
+# (state then relies solely on active-scan advertisements and HA commands).
+DEFAULT_FAN_POLL_INTERVAL = 30
+FAN_POLL_INTERVAL_MIN = 0
+FAN_POLL_INTERVAL_MAX = 600
 
 # Config Options
 CONF_RETRY_COUNT = "retry_count"
@@ -228,6 +233,7 @@ CONF_KEY_ID = "key_id"
 CONF_ENCRYPTION_KEY = "encryption_key"
 CONF_LOCK_NIGHTLATCH = "lock_force_nightlatch"
 CONF_CURTAIN_SPEED = "curtain_speed"
+CONF_FAN_POLL_INTERVAL = "fan_poll_interval"
 
 AIRPURIFIER_BASIC_MODELS = {
     SwitchbotModel.AIR_PURIFIER_JP,
