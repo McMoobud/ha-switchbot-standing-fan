@@ -131,9 +131,10 @@ git push origin feature/switchbot-standing-fan
 ## Follow-up fixes (post initial release)
 
 Three issues reported on real hardware (SwitchBot Standing Circulator Fan with
-RGB Lights) and fixed in this fork. The first is a **PySwitchbot library bug**
-worth reporting to [`sblibs/pySwitchbot`](https://github.com/sblibs/pySwitchbot);
-the other two are integration-level and fold into the core PR above.
+RGB Lights, **device firmware 1.3**) and fixed in this fork. The first is a
+**PySwitchbot library bug** worth reporting to
+[`sblibs/pySwitchbot`](https://github.com/sblibs/pySwitchbot); the other two are
+integration-level and fold into the core PR above.
 
 ### 1. Night-light "Off" never turns the RGB light off — PySwitchbot bug
 
@@ -141,10 +142,10 @@ the other two are integration-level and fold into the core PR above.
 
 `NightLightState` encodes the three states as `LEVEL_1 = 1`, `LEVEL_2 = 2`,
 `OFF = 3`, and `SwitchbotStandingFan.set_night_light()` sends
-`57 0f 41 05 02 <value> FF FF`. On the tested firmware the two **on** levels
-(bytes `0x01` / `0x02`) work, but byte `0x03` is **ignored** — the light stays
-on. The advertisement's `nightLight` field is a 2-bit value and reports `0`
-when the light is off, so the natural encoding is:
+`57 0f 41 05 02 <value> FF FF`. On the tested firmware (**1.3**) the two **on**
+levels (bytes `0x01` / `0x02`) work, but byte `0x03` is **ignored** — the light
+stays on. The advertisement's `nightLight` field is a 2-bit value and reports
+`0` when the light is off, so the natural encoding is:
 
 ```
 0x00 = off, 0x01 = bright (LEVEL_1), 0x02 = soft (LEVEL_2)
